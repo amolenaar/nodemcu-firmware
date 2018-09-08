@@ -24,6 +24,8 @@ STD_CFLAGS=-std=gnu11 -Wimplicit
 #   makefile at its root level - these are then overridden
 #   for a subtree within the makefile rooted therein
 #
+# TODO: Move MPU6050 define into user_config.h,
+# along with MPU9150, MPU6500 and MPU9250
 DEFINES += -DMPU6050 -DEMPL_TARGET_NODEMCU
 
 #############################################################
@@ -42,6 +44,7 @@ INCLUDES := $(INCLUDES) -I $(PDIR)include
 INCLUDES += -I ./
 INCLUDES += -I ../include
 INCLUDES += -I ../libc
+INCLUDES += -I ../platform
 PDIR := ../$(PDIR)
 sinclude $(PDIR)Makefile
 

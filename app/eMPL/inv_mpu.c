@@ -104,45 +104,55 @@ static inline int reg_int_cb(struct int_param_s *int_param)
 
 #elif defined EMPL_TARGET_NODEMCU
 
-#include "../platform/platform.h"
+#include <c_stdio.h>
+#include <user_config.h>
+#include <platform.h>
 #include <osapi.h>
 #include <user_interface.h>
 
-static int i2c_write(unsigned char slave_addr,
-                 unsigned char reg_addr,
-                 unsigned char length,
-                 unsigned char const *data) {
-    unsigned char i;
-    platform_i2c_send_start(0);
-    platform_i2c_send_address(0, (u16) slave_addr, PLATFORM_I2C_DIRECTION_TRANSMITTER);
-    platform_i2c_send_byte(0, reg_addr);
-    platform_i2c_send_stop(0);
+#define log_i       dbg_printf
+#define log_e       dbg_printf
 
+static int i2c_write(uint16_t slave_addr,
+                 unsigned char reg_addr,
+                 size_t length,
+                 unsigned char const *data) {
+    size_t i;
+    // log_i("I2C %x;0x%x: About to send %d bytes (%x)... ", slave_addr, reg_addr, length, data[0]);
     platform_i2c_send_start(0);
+    platform_i2c_send_address(0, slave_addr, PLATFORM_I2C_DIRECTION_TRANSMITTER);
+    platform_i2c_send_byte(0, reg_addr);
+
     for (i = 0; i < length; i++) {
-        if (platform_i2c_send_byte(0, data[i]) == 0)
+        if (platform_i2c_send_byte(0, data[i]) == 0) {
+            // log_i("Unable to write by to i2c (%d)\n", data[i]);
             return 1;
+        }
     }
     platform_i2c_send_stop(0);
+    // log_i("OK\n");
     return 0;
 }
 
-static int i2c_read(unsigned char slave_addr,
+static int i2c_read(uint16_t slave_addr,
                      unsigned char reg_addr,
-                     unsigned char length,
+                     size_t length,
                      unsigned char *data) {
-    unsigned char i;
+    size_t i;
+    // log_i("I2C %x;0x%x: About to read %d bytes... ", slave_addr, reg_addr, length);
     platform_i2c_send_start(0);
-    platform_i2c_send_address(0, (u16) slave_addr, PLATFORM_I2C_DIRECTION_RECEIVER);
+    platform_i2c_send_address(0, slave_addr, PLATFORM_I2C_DIRECTION_TRANSMITTER);
     platform_i2c_send_byte(0, reg_addr);
     platform_i2c_send_stop(0);
 
     platform_i2c_send_start(0);
+    platform_i2c_send_address(0, slave_addr, PLATFORM_I2C_DIRECTION_RECEIVER);
     for (i = 0; i < length; i++) {
-        if((data[i] = platform_i2c_recv_byte(0, i < length - 1)) == -1)
-            return 1;
+        data[i] = (char) platform_i2c_recv_byte(0, i < length - 1);
+        // log_i("%x ", data[i]);
     }
     platform_i2c_send_stop(0);
+    // log_i("OK\n");
 
     return 0;
 }
@@ -183,8 +193,6 @@ static inline int reg_int_cb(struct int_param_s *int_param) {
 #define labs(a)     ((a) > 0 ? (a) : (0-a))
 #define fabs(a)     ((a) > 0 ? (a) : -(a))
 #define min(a,b)    ((a) < (b) ? (a) : (b))
-#define log_i(...)     do {} while (0)
-#define log_e(...)     do {} while (0)
 
 #else
 #error  Gyro driver is missing the system layer implementations.
@@ -2957,6 +2965,8 @@ int mpu_load_firmware(unsigned short length, const unsigned char *firmware,
             return -1;
         if (memcmp(firmware+ii, cur, this_write))
             return -2;
+        // Let the reset timer know we're still okay.
+        system_soft_wdt_feed();
     }
 
     /* Set program start address. */

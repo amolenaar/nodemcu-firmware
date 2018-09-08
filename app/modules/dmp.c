@@ -94,63 +94,40 @@ static int error_msg(lua_State *L, char *msg)
     return 2;
 }
 
-static int init(lua_State *L)
+static int setup(lua_State *L)
 {
-    int result = mpu_init((void *) 0);
-    if (!result)
-    {
-        /* Wake up all sensors. */
-        mpu_set_sensors(INV_XYZ_GYRO | INV_XYZ_ACCEL);
-        /* Push both gyro and accel data into the FIFO. */
-        mpu_configure_fifo(INV_XYZ_GYRO | INV_XYZ_ACCEL);
-        mpu_set_sample_rate(DEFAULT_MPU_HZ);
+    if (mpu_init((void *) 0))
+        return error_msg(L, "mpu_init failed");
 
-        if (mpu_set_sensors(INV_XYZ_GYRO | INV_XYZ_ACCEL))
-        {
-            return error_msg(L, "mpu_set_sensor failed");
-        }
+    if (mpu_set_sensors(INV_XYZ_GYRO | INV_XYZ_ACCEL))
+        return error_msg(L, "mpu_set_sensor failed");
 
-        if (mpu_configure_fifo(INV_XYZ_GYRO | INV_XYZ_ACCEL))
-        {
-            return error_msg(L, "mpu_configure_fifo failed");
-        }
+    if (mpu_configure_fifo(INV_XYZ_GYRO | INV_XYZ_ACCEL))
+        return error_msg(L, "mpu_configure_fifo failed");
 
-        if (mpu_set_sample_rate(DEFAULT_MPU_HZ))
-        {
-            return error_msg(L, "mpu_set_sample_rate failed");
-        }
+    if (mpu_set_sample_rate(DEFAULT_MPU_HZ))
+        return error_msg(L, "mpu_set_sample_rate failed");
 
-        if (dmp_load_motion_driver_firmware())
-        {
-            return error_msg(L, "dmp_load_motion_driver_firmware failed");
-        }
+    if (dmp_load_motion_driver_firmware())
+        return error_msg(L, "dmp_load_motion_driver_firmware failed");
 
-        if (dmp_set_orientation(inv_orientation_matrix_to_scalar(gyro_orientation)))
-        {
-            return error_msg(L, "dmp_set_orientation failed");
-        }
+    if (dmp_set_orientation(inv_orientation_matrix_to_scalar(gyro_orientation)))
+        return error_msg(L, "dmp_set_orientation failed");
 
-        if (dmp_enable_feature(DMP_FEATURE_6X_LP_QUAT | DMP_FEATURE_TAP |
-                               DMP_FEATURE_SEND_CAL_GYRO |
-                               DMP_FEATURE_GYRO_CAL))
-        {
-            return error_msg(L, "dmp_enable_feature failed");
-        }
+    if (dmp_enable_feature(DMP_FEATURE_6X_LP_QUAT | DMP_FEATURE_TAP |
+                            DMP_FEATURE_SEND_CAL_GYRO |
+                            DMP_FEATURE_GYRO_CAL))
+        return error_msg(L, "dmp_enable_feature failed");
 
-        if (dmp_set_fifo_rate(DEFAULT_MPU_HZ))
-        {
-            return error_msg(L, "dmp_set_fifo_rate failed");
-        }
+    if (dmp_set_fifo_rate(DEFAULT_MPU_HZ))
+        return error_msg(L, "dmp_set_fifo_rate failed");
 
-        run_self_test();
+    run_self_test();
 
-        if (mpu_set_dmp_state(1))
-            return error_msg(L, "mpu_set_dmp_state failed");
+    if (mpu_set_dmp_state(1))
+        return error_msg(L, "mpu_set_dmp_state failed");
 
-        lua_pushboolean(L, 1);
-        return 1;
-    }
-    lua_pushboolean(L, 0);
+    lua_pushboolean(L, 1);
     return 1;
 }
 
@@ -202,11 +179,14 @@ static int read_quaternions(lua_State *L)
 
     if (!dmp_read_fifo(gyro, accel, quat, &sensor_timestamp, &sensors, &more))
     {
-        lua_pushnumber(L, (lua_Number) quat[0]);
-        lua_pushnumber(L, (lua_Number) quat[1]);
-        lua_pushnumber(L, (lua_Number) quat[2]);
-        lua_pushnumber(L, (lua_Number) quat[3]);
-        return 4;
+        if (sensors & INV_WXYZ_QUAT)
+        {
+            lua_pushnumber(L, (lua_Number) quat[0]);
+            lua_pushnumber(L, (lua_Number) quat[1]);
+            lua_pushnumber(L, (lua_Number) quat[2]);
+            lua_pushnumber(L, (lua_Number) quat[3]);
+            return 4;
+        }
     }
     return 0;
 }
@@ -214,7 +194,7 @@ static int read_quaternions(lua_State *L)
 // Module function map, this is how we tell Lua what API our module has
 const LUA_REG_TYPE dmp_map[] =
 {
-        {LSTRKEY("init"), LFUNCVAL(init)},
+        {LSTRKEY("setup"), LFUNCVAL(setup)},
         {LSTRKEY("read_euler"), LFUNCVAL(read_euler)},
         {LSTRKEY("read_quaternions"), LFUNCVAL(read_quaternions)},
         {LNILKEY, LNILVAL} // This map must always end like this
